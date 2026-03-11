@@ -16,7 +16,7 @@ node {
 
     stage("Deploy Production") {
         docker.image('agung3wi/alpine-rsync:1.1').inside('-u root') {
-            sshagent (credentials: ['ssh-prod']) {
+            sshagent (credentials: ['ssh-jenkins']) {
 
                 sh '''
                 mkdir -p ~/.ssh
