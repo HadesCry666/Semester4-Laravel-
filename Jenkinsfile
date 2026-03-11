@@ -4,14 +4,13 @@ node {
 
     stage("Build") {
         docker.image('composer:2.7').inside('-u root') {
-            sh 'git config --global --add safe.directory /var/jenkins_home/workspace/Laravel'
-            sh 'composer install'
+            sh 'composer install --no-scripts'
         }
     }
 
     stage("Testing") {
-        docker.image('ubuntu').inside('-u root') {
-            sh 'echo "Ini adalah test"'
+        docker.image('php:8.1-cli').inside('-u root') {
+            sh 'php -v'
         }
     }
 
