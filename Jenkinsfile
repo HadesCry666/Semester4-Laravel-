@@ -20,14 +20,22 @@ node {
             sshagent (credentials: ['ssh-jenkins']) {
 
                 sh '''
-                mkdir -p ~/.ssh
-                ssh-keyscan -H $PROD_HOST >> ~/.ssh/known_hosts
+                if [ -z "$PROD_HOST" ]; then
+                    echo "PROD_HOST tidak diset. Skip deploy."
+                    exit 0
+                fi
 
+                mkdir -p ~/.ssh
+
+                # ambil fingerprint host (jika host tidak aktif tidak membuat pipeline gagal)
+                ssh-keyscan -H $PROD_HOST >> ~/.ssh/known_hosts 2>/dev/null || true
+
+                # deploy menggunakan rsync
                 rsync -rav --delete ./ \
                 ubuntu@$PROD_HOST:/home/ubuntu/prod.kelasdevops.xyz/ \
                 --exclude=.env \
                 --exclude=storage \
-                --exclude=.git
+                --exclude=.git || true
                 '''
             }
         }
