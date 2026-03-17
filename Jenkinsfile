@@ -23,7 +23,8 @@ pipeline {
                               --no-interaction \
                               --prefer-dist \
                               --optimize-autoloader \
-                              --no-dev
+                              --no-dev \
+                              --no-scripts
                         '''
                     }
                 }
@@ -57,15 +58,24 @@ pipeline {
                                 mkdir -p ~/.ssh
                                 chmod 700 ~/.ssh
 
-                                # Ambil fingerprint host
+                                # Add host key biar tidak prompt
                                 ssh-keyscan -H $PROD_HOST >> ~/.ssh/known_hosts 2>/dev/null || true
 
-                                # Deploy pakai rsync
+                                # Sync file ke server
                                 rsync -az --delete ./ \
                                   $PROD_USER@$PROD_HOST:$PROD_PATH \
                                   --exclude=.env \
                                   --exclude=storage \
                                   --exclude=.git
+
+                                echo "=== Optimize Laravel ==="
+
+                                ssh $PROD_USER@$PROD_HOST << 'EOF'
+                                    cd /home/ubuntu/prod.kelasdevops.xyz
+                                    php artisan config:cache || true
+                                    php artisan route:cache || true
+                                    php artisan view:cache || true
+                                EOF
 
                                 echo "=== Deploy selesai ==="
                             '''
