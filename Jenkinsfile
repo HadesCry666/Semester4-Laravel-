@@ -1,44 +1,87 @@
-node {
+pipeline {
+    agent any
 
-    checkout scm
-
-    stage("Build") {
-        docker.image('composer:2.7').inside('--entrypoint="" -u root') {
-            sh 'composer install --no-scripts'
-        }
+    environment {
+        PROD_USER = "ubuntu"
+        PROD_PATH = "/home/ubuntu/prod.kelasdevops.xyz"
     }
 
-    stage("Testing") {
-        docker.image('php:8.1-cli').inside('-u root') {
-            sh 'php -v'
+    stages {
+
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
         }
-    }
 
-    stage("Deploy Production") {
-        docker.image('agung3wi/alpine-rsync:1.1').inside('-u root') {
+        stage('Build - Composer Install') {
+            steps {
+                script {
+                    docker.image('composer:2.7').inside('--entrypoint="" -u root') {
+                        sh '''
+                            composer install \
+                              --no-interaction \
+                              --prefer-dist \
+                              --optimize-autoloader \
+                              --no-dev
+                        '''
+                    }
+                }
+            }
+        }
 
-            sshagent (credentials: ['ssh-jenkins']) {
+        stage('Testing - PHP Check') {
+            steps {
+                script {
+                    docker.image('php:8.1-cli').inside('-u root') {
+                        sh 'php -v'
+                    }
+                }
+            }
+        }
 
-                sh '''
-                if [ -z "$PROD_HOST" ]; then
-                    echo "PROD_HOST tidak diset. Skip deploy."
-                    exit 0
-                fi
+        stage('Deploy Production') {
+            when {
+                expression { return env.PROD_HOST?.trim() }
+            }
 
-                mkdir -p ~/.ssh
+            steps {
+                script {
+                    docker.image('agung3wi/alpine-rsync:1.1').inside('-u root') {
 
-                # ambil fingerprint host (jika host tidak aktif tidak membuat pipeline gagal)
-                ssh-keyscan -H $PROD_HOST >> ~/.ssh/known_hosts 2>/dev/null || true
+                        sshagent(credentials: ['ssh-jenkins']) {
 
-                # deploy menggunakan rsync
-                rsync -rav --delete ./ \
-                ubuntu@$PROD_HOST:/home/ubuntu/prod.kelasdevops.xyz/ \
-                --exclude=.env \
-                --exclude=storage \
-                --exclude=.git || true
-                '''
+                            sh '''
+                                echo "=== Deploy ke $PROD_HOST ==="
+
+                                mkdir -p ~/.ssh
+                                chmod 700 ~/.ssh
+
+                                # Ambil fingerprint host
+                                ssh-keyscan -H $PROD_HOST >> ~/.ssh/known_hosts 2>/dev/null || true
+
+                                # Deploy pakai rsync
+                                rsync -az --delete ./ \
+                                  $PROD_USER@$PROD_HOST:$PROD_PATH \
+                                  --exclude=.env \
+                                  --exclude=storage \
+                                  --exclude=.git
+
+                                echo "=== Deploy selesai ==="
+                            '''
+                        }
+                    }
+                }
             }
         }
     }
 
+    post {
+        success {
+            echo '✅ Pipeline SUCCESS'
+        }
+        failure {
+            echo '❌ Pipeline FAILED'
+        }
+    }
 }
